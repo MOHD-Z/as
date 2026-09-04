@@ -32,6 +32,16 @@ function fetch_section_items($pdo, $section) {
                 (SELECT GROUP_CONCAT(g.name SEPARATOR ', ') FROM movie_genres mg JOIN genres g ON mg.genre_id=g.id WHERE mg.movie_id=m.id) AS genre_names
             FROM movies m WHERE m.archived = 0 ORDER BY m.$order LIMIT $limit")->fetchAll()];
     }
+    if ($section['content_type'] === 'episodes') {
+        $epOrder = ($section['sort_by'] === 'score') ? 's.score DESC, e.episode_number ASC' : 'e.' . ($orderMap[$section['sort_by']] ?? 'created_at DESC');
+        return ['episodes', $pdo->query("SELECT e.*, se.season_number, s.title AS series_title, s.poster, s.slug AS series_slug, s.score,
+                (SELECT GROUP_CONCAT(g.name SEPARATOR ', ') FROM series_genres sg JOIN genres g ON sg.genre_id=g.id WHERE sg.series_id=s.id) AS genre_names
+            FROM episodes e
+            JOIN seasons se ON e.season_id = se.id
+            JOIN series s ON se.series_id = s.id
+            WHERE e.archived = 0 AND s.archived = 0
+            ORDER BY $epOrder LIMIT $limit")->fetchAll()];
+    }
     if (in_array($section['content_type'], ['series', 'trending', 'popular'], true)) {
         return ['series', $pdo->query("SELECT s.*,
                 (SELECT GROUP_CONCAT(g.name SEPARATOR ', ') FROM series_genres sg JOIN genres g ON sg.genre_id=g.id WHERE sg.series_id=s.id) AS genre_names,
@@ -90,7 +100,7 @@ include __DIR__ . '/includes/header.php';
             <?php foreach ($sections as $section):
                 [$type, $items] = fetch_section_items($pdo, $section);
                 if (!$type) continue;
-                $viewAllLink = $section['content_type'] === 'movies' ? 'movies.php' : ($section['content_type'] === 'blog' ? 'blog.php' : 'series.php');
+                $viewAllLink = $section['content_type'] === 'movies' ? 'movies.php' : ($section['content_type'] === 'blog' ? 'blog.php' : ($section['content_type'] === 'episodes' ? 'episodes.php' : 'series.php'));
                 
                 // Translated title mapping if standard
                 $sTitle = $section['title'];

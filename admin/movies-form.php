@@ -43,6 +43,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $mal_id = !empty($_POST['mal_id']) ? (int)$_POST['mal_id'] : null;
     $tmdb_id = !empty($_POST['tmdb_id']) ? (int)$_POST['tmdb_id'] : null;
     $slug = slugify_movie($title);
+    if (function_exists('ensure_database_schema')) {
+        ensure_database_schema($pdo);
+    }
 
     $movieId = $id;
     if ($id) {

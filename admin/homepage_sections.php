@@ -40,7 +40,13 @@ if (isset($_GET['edit'])) {
 }
 
 $sections = $pdo->query("SELECT * FROM homepage_sections ORDER BY sort_order")->fetchAll();
-$contentOptions = ['series' => 'Series', 'movies' => 'Movies', 'trending' => 'Trending (series)', 'popular' => 'Popular (series)'];
+$contentOptions = [
+    'series' => 'Series',
+    'movies' => 'Movies',
+    'episodes' => 'Episodes',
+    'trending' => 'Trending (series)',
+    'popular' => 'Popular (series)'
+];
 $sortOptions = ['newest' => 'Newest First', 'oldest' => 'Oldest First', 'score' => 'Highest Score', 'views' => 'Most Views'];
 
 $admin_page_title = 'Homepage Sections';

@@ -44,11 +44,20 @@ include __DIR__ . '/includes/layout_top.php';
   <link href="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.snow.min.css" rel="stylesheet">
   <style>
     /* Quill needs a light editing surface to be usable; keep it boxed off from the dark admin theme */
-    #editor { background:#fff; color:#111; min-height:280px; border-radius:0 0 8px 8px; }
+    #editor { background:#fff; color:#111; min-height:300px; max-height:550px; overflow-y:auto; border-radius:0 0 8px 8px; font-size:15px; }
     .ql-toolbar.ql-snow { border-radius:8px 8px 0 0; background:#e9ebf4; }
   </style>
 
   <div class="panel">
+    <div class="panel-head" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+      <h2><?= $post ? 'Edit Post: ' . h($post['title'] ?? '') : 'Write New Blog Post' ?></h2>
+      <div style="display:flex;gap:10px;">
+        <button type="submit" form="blog-form" class="btn primary" style="font-weight:600;padding:8px 20px;">
+          <i class="fa fa-save"></i> <?= $post ? 'Save Changes' : 'Publish Post' ?>
+        </button>
+        <a href="blog.php" class="btn">Cancel</a>
+      </div>
+    </div>
     <div class="panel-body">
       <form method="post" enctype="multipart/form-data" id="blog-form">
         <div class="form-grid">
@@ -77,9 +86,11 @@ include __DIR__ . '/includes/layout_top.php';
             <input type="hidden" name="body" id="body-input">
           </div>
         </div>
-        <div style="margin-top:16px;">
-          <button type="submit" class="btn primary"><?= $post ? 'Save Changes' : 'Create Post' ?></button>
-          <a href="blog.php" class="btn">Cancel</a>
+        <div class="form-actions" style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border, #2c2d3f);display:flex;gap:12px;align-items:center;">
+          <button type="submit" class="btn primary" style="font-size:15px;padding:10px 24px;font-weight:600;">
+            <i class="fa fa-check"></i> <?= $post ? 'Save Changes' : 'Publish Post' ?>
+          </button>
+          <a href="blog.php" class="btn" style="padding:10px 18px;">Cancel</a>
         </div>
       </form>
     </div>

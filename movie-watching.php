@@ -22,12 +22,42 @@ $sources = $pdo->prepare("SELECT * FROM video_sources WHERE movie_id = ? AND ena
 $sources->execute([$movie['id']]);
 $sources = $sources->fetchAll();
 
+// Handle video report
 $reportSent = false;
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['report_source_id'])) {
-    $ins = $pdo->prepare("INSERT INTO video_reports (video_source_id, reason) VALUES (?, ?)");
-    $ins->execute([(int)$_POST['report_source_id'], $_POST['reason'] ?? 'Other']);
-    $reportSent = true;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['report_source_id']) || (isset($_POST['action']) && $_POST['action'] === 'report_video'))) {
+    $sourceId = !empty($_POST['report_source_id']) ? (int)$_POST['report_source_id'] : null;
+    $reason = trim($_POST['reason'] ?? 'Other');
+    if ($sourceId) {
+        $ins = $pdo->prepare("INSERT INTO video_reports (video_source_id, reason) VALUES (?, ?)");
+        $ins->execute([$sourceId, $reason]);
+        $reportSent = true;
+    }
 }
+
+// Handle comment submission
+$commentSent = false;
+$commentError = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'post_comment') {
+    $commentText = trim($_POST['comment'] ?? '');
+    if (mb_strlen($commentText) < 2) {
+        $commentError = 'Please enter a valid comment (at least 2 characters).';
+    } else {
+        $userId = is_logged_in() ? (int)current_user()['id'] : null;
+        $authorName = is_logged_in() ? current_user()['name'] : trim($_POST['author_name'] ?? '');
+        if (!$authorName) {
+            $authorName = 'Anime Fan';
+        }
+        $authorName = mb_substr($authorName, 0, 100);
+        $ins = $pdo->prepare("INSERT INTO comments (user_id, episode_id, movie_id, author_name, comment) VALUES (?, NULL, ?, ?, ?)");
+        $ins->execute([$userId, $movie['id'], $authorName, $commentText]);
+        $commentSent = true;
+    }
+}
+
+// Fetch comments for this movie
+$commentStmt = $pdo->prepare("SELECT * FROM comments WHERE movie_id = ? ORDER BY created_at DESC");
+$commentStmt->execute([$movie['id']]);
+$comments = $commentStmt->fetchAll();
 
 $page_title = 'AniStream | ' . $movie['title'];
 include __DIR__ . '/includes/header.php';
@@ -36,20 +66,34 @@ include __DIR__ . '/includes/header.php';
       <div class="container-fluid px-4">
         <div class="row">
           <div class="col-lg-12">
+            <?php if ($reportSent): ?>
+              <div class="alert alert-success alert-dismissible fade show mb-3" role="alert" style="background:#1d1e39;color:#52c41a;border:1px solid #274916;">
+                <i class="fa fa-check-circle"></i> <strong>Report received:</strong> Thank you! Our team has been notified of the issue.
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close" style="color:#fff;"><span aria-hidden="true">&times;</span></button>
+              </div>
+            <?php endif; ?>
+
             <div class="media__video__player">
               <video id="player" playsinline controls data-poster="videos/anime-watch.jpg">
                 <?php foreach ($sources as $i => $src): ?>
-                  <source src="<?= h($src['url']) ?>" type="video/mp4" <?= $i === 0 ? '' : 'style="display:none"' ?> />
+                  <source src="<?= h($src['url']) ?>" type="video/mp4" data-source-id="<?= (int)$src['id']; ?>" <?= $i === 0 ? '' : 'style="display:none"' ?> />
                 <?php endforeach; ?>
                 <?php if (!$sources): ?><source src="videos/1.mp4" type="video/mp4" /><?php endif; ?>
               </video>
             </div>
 
             <div class="server-group">
-              <h4>SERVERS</h4>
+              <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap" style="gap:10px;">
+                <h4 class="mb-0">SERVERS</h4>
+                <?php if ($sources): ?>
+                  <button type="button" class="btn btn-sm btn-outline-danger" data-toggle="modal" data-target="#reportModal" style="border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;">
+                    <i class="fa fa-flag"></i> Report
+                  </button>
+                <?php endif; ?>
+              </div>
               <div class="server-buttons">
                 <?php foreach ($sources as $i => $src): ?>
-                  <button type="button" class="server-btn<?= $i === 0 ? ' active' : '' ?>" data-url="<?= h($src['url']) ?>">
+                  <button type="button" class="server-btn<?= $i === 0 ? ' active' : '' ?>" data-url="<?= h($src['url']) ?>" data-id="<?= (int)$src['id'] ?>">
                     <?= h($src['name']) ?> (<?= h($src['quality']) ?>)
                   </button>
                 <?php endforeach; ?>
@@ -57,34 +101,107 @@ include __DIR__ . '/includes/header.php';
               </div>
             </div>
 
-            <h3 class="mt-3"><?= h($movie['title']) ?></h3>
+            <div class="row mt-4">
+              <div class="col-lg-8">
+                <h3 class="mb-4 text-white"><?= h($movie['title']) ?></h3>
 
-            <div class="media__details__form mt-3">
-              <div class="section-title"><h5>Report a Problem</h5></div>
-              <?php if ($reportSent): ?><p>Thanks — your report was submitted.</p><?php endif; ?>
-              <?php if ($sources): ?>
-              <form method="post">
-                <select name="report_source_id" class="form-control mb-2" style="max-width:300px;">
-                  <?php foreach ($sources as $src): ?>
-                    <option value="<?= (int)$src['id'] ?>"><?= h($src['name']) ?> (<?= h($src['quality']) ?>)</option>
+                <!-- Comments & Reviews Section -->
+                <div class="media__details__review">
+                  <div class="section-title">
+                    <h5>Reviews &amp; Comments (<?= count($comments) ?>)</h5>
+                  </div>
+                  <?php if (!$comments): ?>
+                    <p class="text-white-50" style="font-size:14px;">No comments yet. Be the first to share your thoughts!</p>
+                  <?php endif; ?>
+                  <?php foreach ($comments as $c): ?>
+                    <div class="media__review__item">
+                      <div class="media__review__item__pic">
+                        <img src="img/anime/review-1.jpg" alt="<?= h($c['author_name']) ?>" />
+                      </div>
+                      <div class="media__review__item__text">
+                        <h6><?= h($c['author_name']) ?> - <span><?= time_ago_str($c['created_at']) ?></span></h6>
+                        <p><?= nl2br(h($c['comment'])) ?></p>
+                      </div>
+                    </div>
                   <?php endforeach; ?>
-                </select>
-                <select name="reason" class="form-control mb-2" style="max-width:300px;">
-                  <option>Video doesn't play</option>
-                  <option>Buffering</option>
-                  <option>Wrong video</option>
-                  <option>Audio problem</option>
-                  <option>Subtitle problem</option>
-                  <option>Other</option>
-                </select>
-                <button type="submit" class="primary-btn">Submit Report</button>
-              </form>
-              <?php endif; ?>
+                </div>
+
+                <div class="media__details__form">
+                  <div class="section-title">
+                    <h5>Your Comment</h5>
+                  </div>
+                  <?php if ($commentSent): ?>
+                    <div class="alert alert-success" style="background:#1d1e39;color:#52c41a;border:1px solid #274916;">
+                      <i class="fa fa-check-circle"></i> Your comment has been posted!
+                    </div>
+                  <?php endif; ?>
+                  <?php if (!empty($commentError)): ?>
+                    <div class="alert alert-danger" style="background:#1d1e39;color:#ff4d4f;border:1px solid #5c1819;">
+                      <?= h($commentError) ?>
+                    </div>
+                  <?php endif; ?>
+                  <form method="post" action="">
+                    <input type="hidden" name="action" value="post_comment">
+                    <?php if (!is_logged_in()): ?>
+                      <div class="form-group mb-3">
+                        <input type="text" name="author_name" class="form-control" placeholder="Your Name or Nickname" required style="max-width:320px;background:#1d1e39;border:1px solid #2e3048;color:#fff;" />
+                      </div>
+                    <?php else: ?>
+                      <p class="text-white-50 mb-2"><i class="fa fa-user"></i> Commenting as <strong class="text-white"><?= h(current_user()['name']) ?></strong></p>
+                    <?php endif; ?>
+                    <textarea name="comment" placeholder="Write your review or comment..." required></textarea>
+                    <button type="submit"><i class="fa fa-location-arrow"></i> Post Comment</button>
+                  </form>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </section>
+
+    <!-- Report Modal -->
+    <div class="modal fade" id="reportModal" tabindex="-1" role="dialog" aria-labelledby="reportModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content" style="background:#151622;color:#fff;border:1px solid #2e3048;border-radius:10px;">
+          <div class="modal-header" style="border-bottom:1px solid #2e3048;">
+            <h5 class="modal-title" id="reportModalLabel" style="color:#fff;"><i class="fa fa-flag text-danger"></i> Report Video Problem</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color:#fff;">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <form method="post" action="">
+            <input type="hidden" name="action" value="report_video">
+            <div class="modal-body">
+              <div class="form-group mb-3">
+                <label class="text-white-50">Select Server / Source</label>
+                <select name="report_source_id" class="form-control" style="background:#1d1e39;color:#fff;border:1px solid #2e3048;">
+                  <?php foreach ($sources as $src): ?>
+                    <option value="<?= (int)$src['id'] ?>"><?= h($src['name']) ?> (<?= h($src['quality']) ?>)</option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="form-group mb-3">
+                <label class="text-white-50">Problem Type</label>
+                <select name="reason" class="form-control" style="background:#1d1e39;color:#fff;border:1px solid #2e3048;">
+                  <option>Video doesn't play</option>
+                  <option>Broken link / 404</option>
+                  <option>Buffering / Very slow</option>
+                  <option>Audio out of sync or missing</option>
+                  <option>Subtitle problem</option>
+                  <option>Wrong video or movie</option>
+                  <option>Other issue</option>
+                </select>
+              </div>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #2e3048;">
+              <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-danger btn-sm"><i class="fa fa-paper-plane"></i> Submit Report</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
 
     <script>
       document.querySelectorAll('.server-btn').forEach(function (btn) {

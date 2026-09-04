@@ -49,12 +49,28 @@ function card_col_class($isHomepage = false) {
 
 // Renders one "product__item" media card (used on index, series, movies, search, genre pages)
 function render_card($item, $type, $isHomepage = false) {
-    // $type is 'series' or 'movie'
-    $link = $type === 'series'
-        ? 'tv-details.php?slug=' . urlencode($item['slug'])
-        : 'movie-details.php?slug=' . urlencode($item['slug']);
-    $img = h($item['poster'] ?: 'img/trending/trend-1.jpg');
-    $badge = $type === 'series' ? h(($item['episode_count'] ?? $item['episodes_count'] ?? 0) . ' EP') : h(($item['runtime'] ?? 0) . ' min');
+    if ($type === 'episodes' || $type === 'episode') {
+        $link = 'watching.php?slug=' . urlencode($item['slug']);
+        $img = h($item['poster'] ?: 'img/trending/trend-1.jpg');
+        $badge = 'S' . (int)($item['season_number'] ?? 1) . ' EP ' . (int)($item['episode_number'] ?? 1);
+        $cardTitle = (!empty($item['series_title']) ? $item['series_title'] . ' - ' : '') . $item['title'];
+        $typeLabel = __('episodes', 'Episode');
+        $displayType = 'EPISODE';
+    } elseif ($type === 'series') {
+        $link = 'tv-details.php?slug=' . urlencode($item['slug']);
+        $img = h($item['poster'] ?: 'img/trending/trend-1.jpg');
+        $badge = h(($item['episode_count'] ?? $item['episodes_count'] ?? 0) . ' EP');
+        $cardTitle = $item['title'];
+        $typeLabel = __('series', 'Series');
+        $displayType = 'SERIES';
+    } else {
+        $link = 'movie-details.php?slug=' . urlencode($item['slug']);
+        $img = h($item['poster'] ?: 'img/trending/trend-1.jpg');
+        $badge = h(($item['runtime'] ?? 0) . ' min');
+        $cardTitle = $item['title'];
+        $typeLabel = __('movies', 'Movie');
+        $displayType = 'MOVIE';
+    }
 
     // Differentiate Homepage settings vs Other Pages settings
     if ($isHomepage) {
@@ -76,7 +92,7 @@ function render_card($item, $type, $isHomepage = false) {
         <a href="<?= $link ?>">
           <div class="product__item__pic set-bg" style="background-image: url('<?= $img ?>');">
             <?php if ($showDuration): ?><div class="ep"><?= $badge ?></div><?php endif; ?>
-            <?php if ($showType): ?><div class="type"><?= h(strtoupper($type)) ?></div><?php endif; ?>
+            <?php if ($showType): ?><div class="type"><?= h($displayType) ?></div><?php endif; ?>
             <?php if ($showViews): ?><div class="view"><i class="fa fa-eye"></i> <?= (int)($item['views'] ?? 0) ?></div><?php endif; ?>
           </div>
         </a>
@@ -88,11 +104,11 @@ function render_card($item, $type, $isHomepage = false) {
               <li><a href="genrs.php?slug=<?= h($item['genre_slug'] ?? '') ?>"><?= h(trim($gn)) ?></a></li>
             <?php endforeach; endif; ?>
             <?php if ($showType): ?>
-              <li><a href="#"><?= $type === 'series' ? __('series', 'Series') : __('movies', 'Movie') ?></a></li>
+              <li><a href="#"><?= h($typeLabel) ?></a></li>
             <?php endif; ?>
             <?php if ($showScore && isset($item['score'])): ?><li><i class="fa fa-star"></i> <?= h($item['score']) ?></li><?php endif; ?>
           </ul>
-          <h5><a href="<?= $link ?>"><?= h($item['title']) ?></a></h5>
+          <h5><a href="<?= $link ?>"><?= h($cardTitle) ?></a></h5>
         </div>
       </div>
     </div>
@@ -184,4 +200,16 @@ function nav_link_active_key($url) {
         'search.php' => 'search',
     ];
     return $map[$url] ?? null;
+}
+
+function time_ago_str($datetime) {
+    if (!$datetime) return 'recently';
+    $time = is_numeric($datetime) ? (int)$datetime : strtotime($datetime);
+    if (!$time) return 'recently';
+    $diff = time() - $time;
+    if ($diff < 60) return 'just now';
+    if ($diff < 3600) return floor($diff / 60) . 'm ago';
+    if ($diff < 86400) return floor($diff / 3600) . 'h ago';
+    if ($diff < 604800) return floor($diff / 86400) . 'd ago';
+    return date('M d, Y', $time);
 }

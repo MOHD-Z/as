@@ -110,11 +110,24 @@ $adminGroups = [
 ];
 
 // Fetch current translations from database for selected language
-$stmt = $pdo->prepare("SELECT trans_key, trans_val FROM translations WHERE lang_code = ?");
-$stmt->execute([$selectedLang]);
 $currentTrans = [];
-foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-    $currentTrans[$row['trans_key']] = $row['trans_val'];
+try {
+    $stmt = $pdo->prepare("SELECT trans_key, trans_val FROM translations WHERE lang_code = ?");
+    $stmt->execute([$selectedLang]);
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $currentTrans[$row['trans_key']] = $row['trans_val'];
+    }
+} catch (Exception $e) {
+    if (function_exists('ensure_database_schema')) {
+        ensure_database_schema($pdo);
+    }
+    try {
+        $stmt = $pdo->prepare("SELECT trans_key, trans_val FROM translations WHERE lang_code = ?");
+        $stmt->execute([$selectedLang]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $currentTrans[$row['trans_key']] = $row['trans_val'];
+        }
+    } catch (Exception $e2) {}
 }
 
 $admin_page_title = __('nav_translations', 'Translations');
